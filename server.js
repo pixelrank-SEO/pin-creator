@@ -14,12 +14,21 @@ const { listBoards, findBoard } = require('./src/pinterest/boards');
 const { createPinWithRetry } = require('./src/pinterest/client');
 const { polishPin } = require('./src/ai/polish');
 const { logSuccess, logFailure } = require('./src/logger');
-const { getAccessToken, exchangeCode } = require('./src/pinterest/auth');
+const { getAccessToken, exchangeCode, setRuntimeToken } = require('./src/pinterest/auth');
 
 const app = express();
 const upload = multer({ dest: os.tmpdir() });
 
 app.use(express.json());
+
+// Read pinterest_token cookie and inject into runtime token store
+app.use((req, res, next) => {
+  const raw = req.headers.cookie || '';
+  const match = raw.match(/(?:^|;\s*)pinterest_token=([^;]+)/);
+  if (match) setRuntimeToken(decodeURIComponent(match[1]));
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── Helpers ─────────────────────────────────────────────
@@ -87,7 +96,11 @@ async function handleOAuthCallback(req, res) {
   try {
     const redirectUri = process.env.REDIRECT_URI ||
       `${req.protocol}://${req.get('host')}/auth/callback`;
-    await exchangeCode(code, redirectUri);
+    const tokens = await exchangeCode(code, redirectUri);
+    // Store token in a long-lived cookie (1 year) — works on read-only filesystems
+    res.setHeader('Set-Cookie',
+      `pinterest_token=${encodeURIComponent(tokens.access_token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`
+    );
     res.redirect('/?connected=1');
   } catch (err) {
     res.redirect('/?auth_error=' + encodeURIComponent(err.message));

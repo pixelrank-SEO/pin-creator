@@ -14,16 +14,25 @@ const TOKEN_URL = SANDBOX
   ? 'https://api-sandbox.pinterest.com/v5/oauth/token'
   : 'https://api.pinterest.com/v5/oauth/token';
 
+// In-memory token store — used on read-only filesystems (e.g. Vercel)
+let _runtimeToken = null;
+
+function setRuntimeToken(token) {
+  _runtimeToken = token;
+}
+
 /**
- * Load tokens from tokens.json (or .env fallback).
+ * Load tokens from memory → tokens.json → .env fallback.
  */
 function loadTokens() {
+  if (_runtimeToken) {
+    return { access_token: _runtimeToken, refresh_token: null, expires_at: null };
+  }
   if (fs.existsSync(TOKENS_FILE)) {
     try {
       return JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf8'));
     } catch (_) { /* corrupt file */ }
   }
-  // Fallback to env
   if (process.env.PINTEREST_ACCESS_TOKEN) {
     return { access_token: process.env.PINTEREST_ACCESS_TOKEN, refresh_token: null, expires_at: null };
   }
@@ -31,10 +40,16 @@ function loadTokens() {
 }
 
 /**
- * Save tokens to tokens.json.
+ * Save tokens to tokens.json (falls back to memory on read-only filesystems).
  */
 function saveTokens(tokens) {
-  fs.writeFileSync(TOKENS_FILE, JSON.stringify(tokens, null, 2), 'utf8');
+  _runtimeToken = tokens.access_token;
+  try {
+    fs.writeFileSync(TOKENS_FILE, JSON.stringify(tokens, null, 2), 'utf8');
+  } catch (e) {
+    if (e.code !== 'EROFS') throw e;
+    // Read-only filesystem (Vercel) — token stored in memory only
+  }
 }
 
 /**
@@ -213,4 +228,4 @@ function waitForCallback() {
   });
 }
 
-module.exports = { login, getAccessToken, loadTokens, exchangeCode };
+module.exports = { login, getAccessToken, loadTokens, exchangeCode, setRuntimeToken };
