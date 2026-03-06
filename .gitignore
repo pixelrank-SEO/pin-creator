@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Secrets — never commit these
+.env
+tokens.json
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp uploads
+tmp/

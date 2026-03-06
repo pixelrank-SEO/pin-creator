@@ -1,0 +1,194 @@
+'use strict';
+
+require('dotenv').config();
+const express = require('express');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+
+const { scrapeAmazon, extractAsin } = require('./src/scrapers/amazon');
+const { scrapeGeneric } = require('./src/scrapers/generic');
+const { composePin } = require('./src/composer');
+const { listBoards, findBoard } = require('./src/pinterest/boards');
+const { createPinWithRetry } = require('./src/pinterest/client');
+const { polishPin } = require('./src/ai/polish');
+const { logSuccess, logFailure } = require('./src/logger');
+
+const app = express();
+const upload = multer({ dest: os.tmpdir() });
+
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ─── Helpers ─────────────────────────────────────────────
+async function scrapeUrl(url) {
+  const isAmazon = /amazon\.(com|co\.uk|de|fr|ca|com\.au|in|co\.jp)/i.test(url)
+    || /amzn\.to\//i.test(url)
+    || /amzn\.eu\//i.test(url)
+    || extractAsin(url);
+  return isAmazon ? scrapeAmazon(url) : scrapeGeneric(url);
+}
+
+function parseCSVText(text) {
+  const lines = text.split('\n').filter(l => l.trim());
+  const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+  return lines.slice(1).map(line => {
+    const cols = line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g) || [];
+    const row = {};
+    header.forEach((key, i) => {
+      row[key] = (cols[i] || '').replace(/^"|"$/g, '').trim();
+    });
+    return row;
+  }).filter(r => r.product_url);
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ─── API Routes ───────────────────────────────────────────
+
+// GET /api/boards
+app.get('/api/boards', async (req, res) => {
+  try {
+    const boards = await listBoards();
+    res.json({ boards });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/preview  { url, affiliateUrl, board, hashtags, ai }
+app.post('/api/preview', async (req, res) => {
+  const { url, affiliateUrl, board = 'PREVIEW', hashtags = [], ai = false } = req.body;
+  if (!url || !affiliateUrl) return res.status(400).json({ error: 'url and affiliateUrl are required' });
+
+  try {
+    const productData = await scrapeUrl(url);
+    let tags = Array.isArray(hashtags) ? hashtags : hashtags.split(',').map(t => t.trim()).filter(Boolean);
+
+    if (ai) {
+      try {
+        const polished = await polishPin(productData, tags);
+        productData.title = polished.title;
+        productData.description = polished.description;
+        tags = [];
+      } catch (e) {
+        // fall through with original
+      }
+    }
+
+    const pin = composePin(productData, affiliateUrl, board, tags);
+    res.json({
+      pin,
+      meta: {
+        asin: productData.asin || null,
+        price: productData.price || null,
+        titleLen: pin.title.length,
+        descLen: pin.description.length,
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/post  { url, affiliateUrl, board, hashtags, ai }
+app.post('/api/post', async (req, res) => {
+  const { url, affiliateUrl, board, hashtags = [], ai = false } = req.body;
+  if (!url || !affiliateUrl || !board) {
+    return res.status(400).json({ error: 'url, affiliateUrl and board are required' });
+  }
+
+  try {
+    const productData = await scrapeUrl(url);
+    let tags = Array.isArray(hashtags) ? hashtags : hashtags.split(',').map(t => t.trim()).filter(Boolean);
+
+    if (ai) {
+      try {
+        const polished = await polishPin(productData, tags);
+        productData.title = polished.title;
+        productData.description = polished.description;
+        tags = [];
+      } catch (e) { /* use original */ }
+    }
+
+    const pin = composePin(productData, affiliateUrl, board, tags);
+    const result = await createPinWithRetry(pin);
+
+    logSuccess({ url, affiliateUrl, pinId: result.id, pinUrl: result.url });
+    res.json({ success: true, pinId: result.id, pinUrl: result.url });
+  } catch (err) {
+    logFailure({ url, affiliateUrl, error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/batch  multipart: file=csv, body: { board, ai, delay }
+app.post('/api/batch', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'CSV file is required' });
+
+  const { board = '', ai = false, delay = 12000 } = req.body;
+  const pinDelay = parseInt(delay, 10);
+  const useAi = ai === 'true' || ai === true;
+
+  const csvText = fs.readFileSync(req.file.path, 'utf8');
+  fs.unlinkSync(req.file.path);
+
+  const rows = parseCSVText(csvText);
+  if (!rows.length) return res.status(400).json({ error: 'No valid rows in CSV' });
+
+  // Run in background, stream results via SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+  send({ type: 'start', total: rows.length });
+
+  let success = 0;
+  let failed = 0;
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowBoard = row.board_name || board || process.env.DEFAULT_BOARD_ID || '';
+
+    try {
+      const productData = await scrapeUrl(row.product_url);
+      let tags = [];
+
+      if (useAi) {
+        try {
+          const polished = await polishPin(productData, tags);
+          productData.title = polished.title;
+          productData.description = polished.description;
+        } catch (e) { /* use original */ }
+      }
+
+      const pin = composePin(productData, row.affiliate_url, rowBoard, tags);
+      const result = await createPinWithRetry(pin);
+
+      logSuccess({ url: row.product_url, affiliateUrl: row.affiliate_url, pinId: result.id, pinUrl: result.url });
+      send({ type: 'progress', index: i + 1, total: rows.length, status: 'ok', url: row.product_url, pinUrl: result.url });
+      success++;
+    } catch (err) {
+      logFailure({ url: row.product_url, affiliateUrl: row.affiliate_url, error: err.message });
+      send({ type: 'progress', index: i + 1, total: rows.length, status: 'error', url: row.product_url, error: err.message });
+      failed++;
+    }
+
+    if (i < rows.length - 1) await sleep(pinDelay);
+  }
+
+  send({ type: 'done', success, failed });
+  res.end();
+});
+
+// ─── Start ────────────────────────────────────────────────
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+  console.log(`\n  Pin Creator Web UI`);
+  console.log(`  Running at http://localhost:${PORT}\n`);
+});

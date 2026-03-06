@@ -1,0 +1,20 @@
+{
+  "defaultHashtags": [],
+  "imageOutput": {
+    "width": 1000,
+    "height": 1500,
+    "format": "jpeg",
+    "quality": 85
+  },
+  "scraper": {
+    "requestDelayMs": 2000,
+    "timeout": 15000,
+    "useProxy": false,
+    "proxyUrl": ""
+  },
+  "pinterest": {
+    "pinDelayMs": 12000,
+    "maxRetries": 3,
+    "backoffMinutes": [1, 5, 15]
+  }
+}
