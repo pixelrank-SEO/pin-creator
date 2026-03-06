@@ -75,7 +75,43 @@ nav { display: flex; flex-direction: column; gap: 4px; }
 .nav-btn:hover { background: var(--surface2); color: var(--text); }
 .nav-btn.active { background: rgba(230, 0, 35, 0.15); color: var(--accent); font-weight: 600; }
 
-.sidebar-footer { margin-top: auto; }
+.sidebar-footer { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+
+/* ── Auth widget ── */
+.auth-widget {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.auth-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+.auth-dot.connected { background: var(--success); }
+.auth-dot.disconnected { background: var(--error); }
+
+/* ── Connect button ── */
+.btn-connect {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.btn-connect:hover { background: var(--accent-hover); }
 
 /* ── Badges ── */
 .badge {

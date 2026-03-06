@@ -19,6 +19,19 @@ function toast(msg, type = 'ok') {
   el._t = setTimeout(() => el.classList.remove('show'), 3500);
 }
 
+// ── Auth status helpers ────────────────────────────────────
+function setAuthConnected() {
+  document.getElementById('auth-dot').className = 'auth-dot connected';
+  document.getElementById('auth-status-text').textContent = 'Connected';
+  document.getElementById('connect-btn').style.display = 'none';
+}
+
+function setAuthDisconnected() {
+  document.getElementById('auth-dot').className = 'auth-dot disconnected';
+  document.getElementById('auth-status-text').textContent = 'Not connected';
+  document.getElementById('connect-btn').style.display = '';
+}
+
 // ── Boards loader ─────────────────────────────────────────
 async function loadBoards() {
   try {
@@ -26,7 +39,6 @@ async function loadBoards() {
     if (!res.ok) throw new Error('Failed to fetch boards');
     const { boards } = await res.json();
 
-    // Use board ID as value so we skip an extra API lookup on post
     const opts = boards.map(b =>
       `<option value="${b.id}">${b.name} &nbsp;·&nbsp; ID: ${b.id} &nbsp;(${b.pinCount} pins)</option>`
     ).join('');
@@ -34,16 +46,26 @@ async function loadBoards() {
     document.getElementById('s-board').innerHTML = opts || '<option value="">No boards found</option>';
     document.getElementById('b-board').innerHTML = opts || '<option value="">No boards found</option>';
 
-    document.getElementById('auth-status').className = 'badge badge--green';
-    document.getElementById('auth-status').textContent = 'Connected';
+    setAuthConnected();
   } catch {
-    document.getElementById('auth-status').className = 'badge badge--red';
-    document.getElementById('auth-status').textContent = 'Not connected';
-    const err = '<option value="">Run: node cli.js auth login</option>';
+    setAuthDisconnected();
+    const err = '<option value="">Connect Pinterest first</option>';
     document.getElementById('s-board').innerHTML = err;
     document.getElementById('b-board').innerHTML = err;
   }
 }
+
+// ── Handle OAuth redirect params ──────────────────────────
+(function handleOAuthParams() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('connected') === '1') {
+    toast('Pinterest connected successfully!');
+    window.history.replaceState({}, '', '/');
+  } else if (params.get('auth_error')) {
+    toast('Pinterest auth failed: ' + params.get('auth_error'), 'err');
+    window.history.replaceState({}, '', '/');
+  }
+})();
 
 loadBoards();
 

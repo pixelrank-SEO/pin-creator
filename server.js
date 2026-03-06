@@ -14,6 +14,7 @@ const { listBoards, findBoard } = require('./src/pinterest/boards');
 const { createPinWithRetry } = require('./src/pinterest/client');
 const { polishPin } = require('./src/ai/polish');
 const { logSuccess, logFailure } = require('./src/logger');
+const { getAccessToken, exchangeCode } = require('./src/pinterest/auth');
 
 const app = express();
 const upload = multer({ dest: os.tmpdir() });
@@ -46,6 +47,52 @@ function parseCSVText(text) {
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+// ─── Auth Routes ──────────────────────────────────────────
+
+// GET /auth/status
+app.get('/auth/status', async (req, res) => {
+  try {
+    await getAccessToken();
+    res.json({ connected: true });
+  } catch {
+    res.json({ connected: false });
+  }
+});
+
+// GET /auth/login  →  redirects to Pinterest OAuth
+app.get('/auth/login', (req, res) => {
+  const appId = process.env.PINTEREST_APP_ID;
+  if (!appId) return res.status(500).send('PINTEREST_APP_ID not configured');
+
+  const redirectUri = process.env.REDIRECT_URI ||
+    `${req.protocol}://${req.get('host')}/auth/callback`;
+
+  const scopes = 'pins:read,pins:write,boards:read,boards:write,user_accounts:read';
+  const authUrl =
+    `https://www.pinterest.com/oauth/?client_id=${encodeURIComponent(appId)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&response_type=code` +
+    `&scope=${encodeURIComponent(scopes)}`;
+
+  res.redirect(authUrl);
+});
+
+// GET /auth/callback  →  exchange code, save token, redirect to UI
+app.get('/auth/callback', async (req, res) => {
+  const { code, error } = req.query;
+  if (error) return res.redirect('/?auth_error=' + encodeURIComponent(error));
+  if (!code) return res.redirect('/?auth_error=missing_code');
+
+  try {
+    const redirectUri = process.env.REDIRECT_URI ||
+      `${req.protocol}://${req.get('host')}/auth/callback`;
+    await exchangeCode(code, redirectUri);
+    res.redirect('/?connected=1');
+  } catch (err) {
+    res.redirect('/?auth_error=' + encodeURIComponent(err.message));
+  }
+});
 
 // ─── API Routes ───────────────────────────────────────────
 
@@ -187,8 +234,12 @@ app.post('/api/batch', upload.single('file'), async (req, res) => {
 });
 
 // ─── Start ────────────────────────────────────────────────
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`\n  Pin Creator Web UI`);
-  console.log(`  Running at http://localhost:${PORT}\n`);
-});
+if (require.main === module) {
+  const PORT = process.env.PORT || 4000;
+  app.listen(PORT, () => {
+    console.log(`\n  Pin Creator Web UI`);
+    console.log(`  Running at http://localhost:${PORT}\n`);
+  });
+}
+
+module.exports = app;

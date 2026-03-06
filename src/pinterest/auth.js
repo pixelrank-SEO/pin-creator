@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 const TOKENS_FILE = path.join(process.cwd(), 'tokens.json');
-const REDIRECT_URI = 'http://localhost:3000/callback';
+const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:4000/auth/callback';
 const SANDBOX = process.env.PINTEREST_SANDBOX === 'true';
 const AUTH_URL = 'https://www.pinterest.com/oauth/';
 const TOKEN_URL = SANDBOX
@@ -40,7 +40,7 @@ function saveTokens(tokens) {
 /**
  * Exchange an authorization code for access + refresh tokens.
  */
-async function exchangeCode(code) {
+async function exchangeCode(code, redirectUri = REDIRECT_URI) {
   const appId = process.env.PINTEREST_APP_ID;
   const appSecret = process.env.PINTEREST_APP_SECRET;
 
@@ -55,7 +55,7 @@ async function exchangeCode(code) {
     new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: REDIRECT_URI,
+      redirect_uri: redirectUri,
     }).toString(),
     {
       headers: {
@@ -213,4 +213,4 @@ function waitForCallback() {
   });
 }
 
-module.exports = { login, getAccessToken, loadTokens };
+module.exports = { login, getAccessToken, loadTokens, exchangeCode };
