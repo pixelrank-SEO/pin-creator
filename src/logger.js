@@ -10,14 +10,14 @@ const CSV_HEADER = 'timestamp,url,affiliate_url,status,pin_id,pin_url,error\n';
 
 function ensureLogsDir() {
   if (!fs.existsSync(LOGS_DIR)) {
-    fs.mkdirSync(LOGS_DIR, { recursive: true });
+    try { fs.mkdirSync(LOGS_DIR, { recursive: true }); } catch (_) {}
   }
 }
 
 function ensureCsvHeader() {
   ensureLogsDir();
   if (!fs.existsSync(CSV_FILE)) {
-    fs.writeFileSync(CSV_FILE, CSV_HEADER, 'utf8');
+    try { fs.writeFileSync(CSV_FILE, CSV_HEADER, 'utf8'); } catch (_) {}
   }
 }
 
@@ -48,7 +48,7 @@ function logToCsv({ url, affiliateUrl, status, pinId, pinUrl, error }) {
     escape(error || ''),
   ].join(',') + '\n';
 
-  fs.appendFileSync(CSV_FILE, row, 'utf8');
+  try { fs.appendFileSync(CSV_FILE, row, 'utf8'); } catch (_) {}
 }
 
 /**

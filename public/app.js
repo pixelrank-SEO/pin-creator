@@ -24,12 +24,49 @@ function setAuthConnected() {
   document.getElementById('auth-dot').className = 'auth-dot connected';
   document.getElementById('auth-status-text').textContent = 'Connected';
   document.getElementById('connect-btn').style.display = 'none';
+  document.getElementById('disconnect-btn').style.display = '';
 }
 
 function setAuthDisconnected() {
   document.getElementById('auth-dot').className = 'auth-dot disconnected';
   document.getElementById('auth-status-text').textContent = 'Not connected';
   document.getElementById('connect-btn').style.display = '';
+  document.getElementById('disconnect-btn').style.display = 'none';
+}
+
+// ── Create board ───────────────────────────────────────────
+function toggleCreateBoard(prefix) {
+  const form = document.getElementById(prefix + '-create-board');
+  form.style.display = form.style.display === 'none' ? '' : 'none';
+}
+
+async function createBoard(prefix) {
+  const name = document.getElementById(prefix + '-board-name').value.trim();
+  const privacy = document.getElementById(prefix + '-board-privacy').value;
+  if (!name) { toast('Enter a board name', 'err'); return; }
+
+  try {
+    const res = await fetch('/api/boards', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, privacy }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    // Add new board to both selects and select it
+    const opt = `<option value="${data.board.id}" selected>${data.board.name} &nbsp;·&nbsp; ID: ${data.board.id} &nbsp;(0 pins)</option>`;
+    ['s-board', 'b-board'].forEach(id => {
+      document.getElementById(id).insertAdjacentHTML('afterbegin', opt.replace(' selected', ''));
+    });
+    document.getElementById(prefix + '-board').options[0].selected = true;
+
+    document.getElementById(prefix + '-board-name').value = '';
+    document.getElementById(prefix + '-create-board').style.display = 'none';
+    toast(`Board "${data.board.name}" created!`);
+  } catch (err) {
+    toast(err.message, 'err');
+  }
 }
 
 // ── Boards loader ─────────────────────────────────────────

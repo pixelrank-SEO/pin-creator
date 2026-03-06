@@ -58,4 +58,20 @@ async function findBoard(nameOrId) {
   return match || null;
 }
 
-module.exports = { listBoards, findBoard };
+/**
+ * Create a new board.
+ * @param {string} name
+ * @param {'PUBLIC'|'SECRET'} privacy
+ */
+async function createBoard(name, privacy = 'PUBLIC') {
+  const token = await getAccessToken();
+  const response = await axios.post(
+    `${BASE_URL}/boards`,
+    { name, privacy },
+    { headers: { Authorization: `Bearer ${token}` }, timeout: 10000 }
+  );
+  const b = response.data;
+  return { id: b.id, name: b.name, description: b.description || '', pinCount: 0 };
+}
+
+module.exports = { listBoards, findBoard, createBoard };

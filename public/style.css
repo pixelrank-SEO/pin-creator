@@ -113,6 +113,38 @@ nav { display: flex; flex-direction: column; gap: 4px; }
 }
 .btn-connect:hover { background: var(--accent-hover); }
 
+/* ── Disconnect link ── */
+.disconnect-link {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-decoration: none;
+  opacity: 0.6;
+  cursor: pointer;
+}
+.disconnect-link:hover { opacity: 1; color: var(--error); }
+
+/* ── Create board inline ── */
+.board-create-wrap { margin-top: 8px; }
+.create-board-toggle {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+.create-board-toggle:hover { text-decoration: underline; }
+.create-board-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+.create-board-form input { flex: 1; }
+.create-board-form select { width: auto; flex-shrink: 0; }
+.btn--sm { padding: 6px 14px; font-size: 13px; white-space: nowrap; }
+
 /* ── Badges ── */
 .badge {
   display: inline-block;

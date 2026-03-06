@@ -10,7 +10,7 @@ const os = require('os');
 const { scrapeAmazon, extractAsin } = require('./src/scrapers/amazon');
 const { scrapeGeneric } = require('./src/scrapers/generic');
 const { composePin } = require('./src/composer');
-const { listBoards, findBoard } = require('./src/pinterest/boards');
+const { listBoards, findBoard, createBoard } = require('./src/pinterest/boards');
 const { createPinWithRetry } = require('./src/pinterest/client');
 const { polishPin } = require('./src/ai/polish');
 const { logSuccess, logFailure } = require('./src/logger');
@@ -110,6 +110,13 @@ async function handleOAuthCallback(req, res) {
 app.get('/auth/callback', handleOAuthCallback);
 app.get('/callback', handleOAuthCallback);
 
+// GET /auth/logout  →  clear cookie and redirect home
+app.get('/auth/logout', (req, res) => {
+  setRuntimeToken(null);
+  res.setHeader('Set-Cookie', 'pinterest_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+  res.redirect('/');
+});
+
 // ─── API Routes ───────────────────────────────────────────
 
 // GET /api/boards
@@ -117,6 +124,18 @@ app.get('/api/boards', async (req, res) => {
   try {
     const boards = await listBoards();
     res.json({ boards });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/boards  { name, privacy }
+app.post('/api/boards', async (req, res) => {
+  const { name, privacy = 'PUBLIC' } = req.body;
+  if (!name) return res.status(400).json({ error: 'Board name is required' });
+  try {
+    const board = await createBoard(name, privacy);
+    res.json({ board });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
