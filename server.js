@@ -143,8 +143,9 @@ app.post('/api/boards', async (req, res) => {
 
 // POST /api/preview  { url, affiliateUrl, board, hashtags, ai }
 app.post('/api/preview', async (req, res) => {
-  const { url, affiliateUrl, board = 'PREVIEW', hashtags = [], ai = false } = req.body;
-  if (!url || !affiliateUrl) return res.status(400).json({ error: 'url and affiliateUrl are required' });
+  const { url, board = 'PREVIEW', hashtags = [], ai = false } = req.body;
+  const affiliateUrl = req.body.affiliateUrl || url;
+  if (!url) return res.status(400).json({ error: 'url is required' });
 
   try {
     const productData = await scrapeUrl(url);
@@ -178,9 +179,10 @@ app.post('/api/preview', async (req, res) => {
 
 // POST /api/post  { url, affiliateUrl, board, hashtags, ai }
 app.post('/api/post', async (req, res) => {
-  const { url, affiliateUrl, board, hashtags = [], ai = false } = req.body;
-  if (!url || !affiliateUrl || !board) {
-    return res.status(400).json({ error: 'url, affiliateUrl and board are required' });
+  const { url, board, hashtags = [], ai = false } = req.body;
+  const affiliateUrl = req.body.affiliateUrl || url;
+  if (!url || !board) {
+    return res.status(400).json({ error: 'url and board are required' });
   }
 
   try {
@@ -249,14 +251,15 @@ app.post('/api/batch', upload.single('file'), async (req, res) => {
         } catch (e) { /* use original */ }
       }
 
-      const pin = composePin(productData, row.affiliate_url, rowBoard, tags);
+      const affiliateUrl = row.affiliate_url || row.product_url;
+      const pin = composePin(productData, affiliateUrl, rowBoard, tags);
       const result = await createPinWithRetry(pin);
 
-      logSuccess({ url: row.product_url, affiliateUrl: row.affiliate_url, pinId: result.id, pinUrl: result.url });
+      logSuccess({ url: row.product_url, affiliateUrl, pinId: result.id, pinUrl: result.url });
       send({ type: 'progress', index: i + 1, total: rows.length, status: 'ok', url: row.product_url, pinUrl: result.url });
       success++;
     } catch (err) {
-      logFailure({ url: row.product_url, affiliateUrl: row.affiliate_url, error: err.message });
+      logFailure({ url: row.product_url, affiliateUrl: row.affiliate_url || row.product_url, error: err.message });
       send({ type: 'progress', index: i + 1, total: rows.length, status: 'error', url: row.product_url, error: err.message });
       failed++;
     }

@@ -121,12 +121,11 @@ document.getElementById('s-board').addEventListener('change', function () {
 // ── Single Pin: Preview ───────────────────────────────────
 document.getElementById('s-preview-btn').addEventListener('click', async () => {
   const url    = document.getElementById('s-url').value.trim();
-  const aff    = document.getElementById('s-aff').value.trim();
   const board  = document.getElementById('s-board').value;
   const tags   = document.getElementById('s-tags').value;
   const ai     = document.getElementById('s-ai').checked;
 
-  if (!url || !aff) { toast('Product URL and Affiliate URL are required', 'err'); return; }
+  if (!url) { toast('Product URL is required', 'err'); return; }
 
   const btn = document.getElementById('s-preview-btn');
   btn.disabled = true;
@@ -136,7 +135,7 @@ document.getElementById('s-preview-btn').addEventListener('click', async () => {
     const res = await fetch('/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, affiliateUrl: aff, board, hashtags: tags, ai }),
+      body: JSON.stringify({ url, affiliateUrl: url, board, hashtags: tags, ai }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
@@ -165,12 +164,11 @@ document.getElementById('s-preview-btn').addEventListener('click', async () => {
 // ── Single Pin: Post ──────────────────────────────────────
 document.getElementById('s-post-btn').addEventListener('click', async () => {
   const url   = document.getElementById('s-url').value.trim();
-  const aff   = document.getElementById('s-aff').value.trim();
   const board = document.getElementById('s-board').value;
   const tags  = document.getElementById('s-tags').value;
   const ai    = document.getElementById('s-ai').checked;
 
-  if (!url || !aff) { toast('Product URL and Affiliate URL are required', 'err'); return; }
+  if (!url) { toast('Product URL is required', 'err'); return; }
   if (!board) { toast('Select a board first', 'err'); return; }
 
   const btn = document.getElementById('s-post-btn');
@@ -184,7 +182,7 @@ document.getElementById('s-post-btn').addEventListener('click', async () => {
     const res = await fetch('/api/post', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, affiliateUrl: aff, board, hashtags: tags, ai }),
+      body: JSON.stringify({ url, affiliateUrl: url, board, hashtags: tags, ai }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
